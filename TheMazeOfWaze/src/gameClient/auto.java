@@ -1,478 +1,552 @@
 package gameClient;
 
+import java.util.Iterator;
 import java.awt.Color;
 import java.awt.Font;
+import java.io.FileNotFoundException;
+import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Iterator;
+import java.util.Collection;
 import java.util.List;
+
 
 import javax.swing.JOptionPane;
 
+import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
 import Server.Game_Server;
+
 import Server.game_service;
 import algorithms.Graph_Algo;
+
 import dataStructure.DGraph;
+import dataStructure.EdgeData;
 import dataStructure.edge_data;
 import dataStructure.graph;
 import dataStructure.node_data;
-
 import utils.Point3D;
 import utils.Range;
 import utils.StdDraw;
 
-public class auto implements Runnable 
-{
-	private game_service game;
-	private Thread drawer;
-	private DGraph dGraph;
-	private Graph_Algo aGraph = new Graph_Algo();
-	private Range rx, ry;
-	private List<Fruit> fruits_List;
-	private List<Robot> robots_List;
-	private final static double epsilon = 0.0000001;
-	private final static double epsilon2 = 0.00019;
+public class auto implements Runnable{
 
-	public auto()
-	{
-		StdDraw.init();
-		//open input window for game number
-		while(true)
+	
+		 game_service game;
+		 Thread tr;
+		 DGraph dgraph;
+		 Graph_Algo Algo = new Graph_Algo();
+		 Range rx, ry;
+		 List<Fruit> fru;
+		 List<Robot> rob;
+	     final static double epsilon = 0.0000001;
+		 final static double epsilon2 = 0.00019;
+		 static boolean KMLbool = false;
+		 static String KmlName;
+		 static int numgame;
+
+
+
+		public auto(int game_number)
+
 		{
-			String temp = JOptionPane.showInputDialog(null, "please choose a game between 0-23");
-			int game_number = temp != null ? Integer.parseInt(temp) : -1;
-			if(game_number >= 0  && game_number <= 23 )
-			{
-				game = Game_Server.getServer(game_number);
-				break;
-			}
-			else if(game_number == -1)
-				System.exit(0);
-			else 
-			{
-				JOptionPane.showMessageDialog(null, "invalid input, please choose between 0-23", "Error", JOptionPane.INFORMATION_MESSAGE);
-				continue;
-			}
+
+			game = Game_Server.getServer(game_number);
+			numgame = game_number;
+			//read from game server
+			dgraph = new DGraph();
+			dgraph.init(game.getGraph());
+			Algo.init(dgraph);
+			System.out.println(game.toString());
+			//bring the min and max x and y
+			rx = FindXmaxmin(dgraph);
+			ry = FindYmaxmin(dgraph);
+			//this thread is in charge of the game
+			tr = new Thread(this, "Atr");
+			tr.start();
+
 		}
-		//read data about the chosen game from game server
-		dGraph = new DGraph();
-		dGraph.init(game.getGraph());
-		aGraph.init(dGraph);
-		System.out.println(game.toString());
-		//scale x and y
-		rx = findRx(dGraph);
-		ry = findRy(dGraph);
 
-		//this thread is in charge of the game
-		drawer = new Thread(this, "Drawer");
-		drawer.start();
-	}
 
-	@Override
-	public void run() 
-	{
-		drawGraph(dGraph);
-		int robots_num = getRobotsNumber(game.toString());
-		drawFruits(game.getFruits());
-		placeRobots(robots_num);
-		drawRobots(game.getRobots());
-		if(JOptionPane.showConfirmDialog(null, "press YES to start the game", "TheMaze of Waze", JOptionPane.YES_OPTION) != JOptionPane.YES_OPTION)
+
+		@Override
+		public void run() {
+
+			drawGraph(dgraph);
+			int numR=getnumR(game);
+			DrawFruit(game);
+			changeRobot(numR);
+			DrawRobots(game.getRobots());
+			int ans=JOptionPane.showConfirmDialog(null, "you want KML file??", "message", JOptionPane.YES_OPTION);
+			if(ans == 0) 
+			{
+				String input = JOptionPane.showInputDialog("enter your name file");
+				if(input != null && input != "")
+					startKML(input);
+
+			}
+
+			game.startGame();
+			StdDraw.setFont();
+			StdDraw.setPenColor(Color.BLUE);
+			StdDraw.text( rx.get_max()-0.002, ry.get_max()-0.0005,"time to end: "+game.timeToEnd()/1000);
+			while(game.isRunning()) {
+
+				StepForRobot();
+				refreshGame();
+				try {
+
+				
+					Thread.sleep(100);
+
+				} catch (InterruptedException e) {
+					e.printStackTrace();
+
+				}
+
+			}
+
+			if(KMLbool) {
+
+				try {
+					KML_Logger.closeFile(KmlName);
+
+				}catch (IOException e) {
+
+					e.printStackTrace();
+
+				}
+
+			}
+
+			String message = "";
+			int i = 1;
+			for(Robot r : rob)
+				message += "\trobot " + (i++) + " score: " + r.value +"\n";
+			JOptionPane.showMessageDialog(null, message);
 			System.exit(0);
-		game.startGame();
-		StdDraw.setFont();
-		StdDraw.setPenColor(Color.BLUE);
-		StdDraw.text( rx.get_max()-0.002, ry.get_max()-0.0005,"time to end: "+game.timeToEnd()/1000);
-		while(game.isRunning())
-		{
-			placeRobots();
-			RefreshFrame();
-			try 
-			{
-				Thread.sleep(100);
-			} 
-			catch (InterruptedException e) 
-			{
-				e.printStackTrace();
-			}
+
 		}
-	}
 
 
+		private void refreshGame() {
 
-	/* ****************************************************
-	 *      ************Auxiliary functions***********
-	 *          *********************************        */
+			StdDraw.enableDoubleBuffering();
+			StdDraw.clear();
+			StdDraw.setScale();
+			StdDraw.picture(0.5, 0.5, "map.png");
+			drawGraph(dgraph);
+			DrawRobots(game.move());
+			DrawFruit(game);
+			StdDraw.setPenColor(Color.BLUE);
+			StdDraw.text(rx.get_max()-0.002, ry.get_max()-0.0005,"time to end: "+ game.timeToEnd() / 1000);
+			StdDraw.show();
 
-	/**
-	 * this method in charge of repaint the frame over and over
-	 * */
-	private void RefreshFrame()
-	{
-		StdDraw.enableDoubleBuffering();
-		StdDraw.clear();
-		StdDraw.setScale();
-		StdDraw.picture(0.5, 0.5, "map.png");
-		drawGraph(dGraph);
-		drawFruits(game.getFruits());
-		drawRobots(game.move());
-		StdDraw.setPenColor(Color.BLUE);
-		Font f=new Font("BOLD", Font.ITALIC, 18);
-		StdDraw.setFont(f);
-		StdDraw.text(rx.get_max()-0.002, ry.get_max()-0.0005,"time to end: "+ game.timeToEnd() / 1000);
-		StdDraw.show();
-	}
+		}
 
-	/**
-	 * 
-	 * */
-	private void placeRobots() 
-	{
-		for(Robot r : robots_List)
-		{	
-			double maxSum = 0;
-			node_data v = null;
-			for(Fruit f : fruits_List)
-			{
-				double sum =0;
-				int dest = f.getEdge().getDest();
-				if(dest != r.getSrc())
-				{
-					List<node_data> list = aGraph.shortestPath(r.getSrc(), dest);
-					System.out.println(list);
-					//sum all edges weight on the way from robot to dest. 
-					for(int i =0;i<list.size()-1;i++)
-						sum += dGraph.getEdge(list.get(i).getKey(), list.get(i+1).getKey()).getWeight();
-					sum = f.getValue() / sum;
-					if(sum > maxSum)
-					{
+ 
+/**
+*take the robot to the best fruit with shortestPath.
+ * */
+		private void StepForRobot() { 
+
+			Iterator<Robot> itr = rob.iterator();
+			while(itr.hasNext()) {
+
+				Robot r = itr.next();
+				Fruit fDest = null;
+				double maxSum = 0;
+				node_data v = null;
+				Iterator<Fruit> it = fru.iterator();
+				while(it.hasNext()) {
+
+				
+					Fruit f = it.next();
+					double sum =0;
+					int dest = f.e.getSrc();
+					List<node_data> list = Algo.shortestPath(r.src, dest);
+					list.add(dgraph.getNode(f.e.getDest()));
+
+		 
+
+					for(int i = 0;i<list.size()-1;i++)
+						sum += dgraph.getEdge(list.get(i).getKey(), list.get(i+1).getKey()).getWeight();
+						sum = f.getValue() / sum;
+
+					if(sum > maxSum && !f.isDest) {
+
+					
 						maxSum = sum;
-						v = list.get(1); // index 0 is the src vertex so we take the next one
+						v = list.get(1); 
+						fDest = f;
+
+					}
+
+				}
+
+				if(fDest != null) {
+
+				
+
+					fDest.setDest(true);
+					game.chooseNextEdge(r.id, v.getKey());
+
+				}
+
+			}
+
+		}
+
+		
+		
+/**
+* find the best spot for all the robot too start.
+* */
+		public void changeRobot(int numR) {
+			
+			edge_data e=new EdgeData();
+			int numans=0;
+			int i=0;
+			double x=0;
+			double y=Double.MAX_VALUE;
+			
+			while(i<numR) {
+				
+				double c=0; 
+				for(Fruit f: fru) {
+					e=f.e;
+					x=f.value/e.getWeight();
+					if(x>c && x<y) {
+						 
+						c=x; 
+						numans=e.getSrc();
 					}
 				}
+				y=c;
+				game.addRobot(numans);
+				i++;
 			}
-			System.out.println("robot: "+r.getSrc() + " dest: "+v.getKey());
-			game.chooseNextEdge(r.getId(), v.getKey());
 		}
-	}
 
-	/**
-	 * this method find the best starting place for each robot.<br>
-	 * considering an edge that has fruit on, <br>
-	 * calculating fruit`s value divided by the time to walk through this edge (from src to dest).<br>
-	 * the first robot will be placed on the src that the edge going out from him got the best results.
-	 * @param robots_num - number of robots to place
-	 * */
-	private void placeRobots(int robots_num) 
-	{
 
-		edge_data currentEdge;
-		int vNumber = 0;
-		double  valuePerSecond, lastResult = Double.MAX_VALUE;
-		for(int i = 0;i<robots_num;i++)
-		{
-			double maxValuePerSecond = 0;
-			for(Fruit f : fruits_List)
-			{
-				currentEdge = f.getEdge();
-				valuePerSecond = f.getValue() / currentEdge.getWeight(); //calculate the value per second while "walking" on this edge.
-				if(valuePerSecond > maxValuePerSecond && valuePerSecond < lastResult)
-				{
-					maxValuePerSecond = valuePerSecond;
-					vNumber = currentEdge.getSrc();
+	
+		
+/**
+*init and draw the robot.
+* */
+		public void DrawRobots(List<String> robots) {
+			
+			rob=new ArrayList<>();
+			List<String> r=game.getRobots();
+			String RJ=r.toString();
+			try {
+				JSONArray j =new JSONArray(RJ);
+				int i=0; 
+				int c=0;
+				while(i<j.length()) {
+					String help="";
+					JSONObject n=(JSONObject) j.get(i);
+					JSONObject jr = n.getJSONObject("Robot");
+					String s=jr.getString("pos");
+					String p[]=new String[3];
+					for (int k = 0; k < s.length(); k++) {
+						if(s.charAt(k)!=',') {
+							help=help+s.charAt(k);
+						}
+						if(c<3&&s.charAt(k)==',') {
+							p[c]=help; 
+							c++;
+							help="";
+						}
+					}
+					p[c]=help; 
+					c=0;
+					double x=Double.parseDouble(p[0]);
+					double y=Double.parseDouble(p[1]);
+					double z=Double.parseDouble(p[2]);
+					Point3D p1=new Point3D(x,y,z);
+					int id=jr.getInt("id");
+					double value=jr.getDouble("value");
+					int src=jr.getInt("src");
+					int dest=jr.getInt("dest");
+					double speed=jr.getDouble("speed");
+					Robot ro=new Robot(src,p1,id,dest,value,speed);
+					rob.add(ro);
+					i++;
+				
+					if(KMLbool) {
+
+						try {
+							KML_Logger.write(KmlName, ro.p.x(), ro.p.y(), "Robot", game.timeToEnd());
+
+						} catch (FileNotFoundException e) {
+							e.printStackTrace();
+
+						}
+
+					}
 				}
+			
+			
+			}catch(Exception error) {
+				error.printStackTrace();
+
+				System.out.println("catch");
+			
+		}
+			int n=1;
+			for (Robot r1: rob) {
+			StdDraw.setPenRadius(0.030);
+			StdDraw.setPenColor(Color.black);
+			StdDraw.point(r1.p.x(), r1.p.y());
+			StdDraw.text(rx.get_max() - 0.001 - 0.0075*n, ry.get_max()-0.0005, 
+					"robot "+ (n++) + " score: " + r1.value);
+		}
+		
+		}
+
+
+		
+/**
+*init and draw the fruit.
+* */
+		private void DrawFruit(game_service game) {
+
+			fru=new ArrayList<Fruit>();
+			List<String> f= game.getFruits();
+			String FJ=f.toString(); 
+			
+			try {
+				JSONArray j =new JSONArray(FJ);
+				int i=0; 
+				int c=0;
+				while(i<j.length()) {
+					String help="";
+					JSONObject n=(JSONObject) j.get(i);
+					JSONObject jf = n.getJSONObject("Fruit");
+					String s=jf.getString("pos");
+					String p[]=new String[3];
+					for (int k = 0; k < s.length(); k++) {
+						if(s.charAt(k)!=',') {
+							help=help+s.charAt(k);
+						}
+						if(c<3&&s.charAt(k)==',') {
+							p[c]=help; 
+							c++;
+							help="";
+						}
+					}
+					p[c]=help; 
+					c=0;
+					double x=Double.parseDouble(p[0]);
+					double y=Double.parseDouble(p[1]);
+					double z=Double.parseDouble(p[2]);
+					Point3D p1=new Point3D(x,y,z);
+					double value=jf.getDouble("value");
+					int type=jf.getInt("type");
+					Fruit fr=new Fruit(value,p1,type,findEdgeFruit(p1, type));
+					fru.add(fr);
+					i++;
+					if(KMLbool) {
+					
+						String objType = "";
+						if(fr.type == 1)
+							objType="Apple";
+						else 
+							objType="Banana";
+					
+						try {
+						KML_Logger.write(KmlName, fr.p.x(), fr.p.y(), objType, game.timeToEnd());
+					
+						} catch (FileNotFoundException e) {
+							 
+							e.printStackTrace();
+								
+						}
+					
+					}
+				
+				}
+		
+			}catch(Exception error) {
+			error.printStackTrace();
+
+			System.out.println("catch");
+		
 			}
-			lastResult = maxValuePerSecond;
-			game.addRobot(vNumber);
+			for (Fruit f1: fru) {
+				String fruit_icon = ""; 
+				if(f1.type==1)
+					fruit_icon="./apple.png";
+				if(f1.type==-1)
+					fruit_icon="./banana.png";
+				
+			
+				StdDraw.picture(f1.p.x(), f1.p.y(), fruit_icon);
+			}
 		}
 
-	}
-
-	/**
-	 * this method iterate over all robots`s JSON string that given from server,
-	 * <br> and fill robots_List with robots objects.
-	 * when finished call method drawRobots() to draw the functions
-	 * @param robots - List of JSON strings, each represent a single robot.
-	 * */
-	private void drawRobots(List<String> robots) 
-	{
-		robots_List = new ArrayList<>();
-		Iterator<String> i = robots.iterator();
-		while(i.hasNext())
-		{
-			Robot r = getRobot(i.next());
-			robots_List.add(r);
-		} 
-		drawRobots();
-	}
-
-	/**
-	 * auxiliary function to parse JSON string representing a single robot,
-	 * <br> using the parsed data it builds robot object
-	 * @param JSONRobot - JSON string representing robot.
-	 * @return new robot object with the data inside the JSON string
-	 * */
-	private Robot getRobot(String JSONRobot) 
-	{
-		Point3D pos = null;
-		int src=0, dest=0,ID=0;
-		double money = 0;
-		try 
-		{
-			org.json.JSONObject jo = new org.json.JSONObject(JSONRobot);
-			org.json.JSONObject robot = (JSONObject) jo.get("Robot");
-			src = robot.getInt("src");
-			dest = robot.getInt("dest");
-			ID = robot.getInt("id");
-			money = robot.getDouble("value");
-			pos = new Point3D(robot.getString("pos"));
-		} 
-		catch (JSONException e) 
-		{
-			e.printStackTrace();
-		}
-		return new Robot(src, ID, pos, dest, money);
-	}
-
-	/**
-	 * this method draw a small filled circle for each robot in the game <br>
-	 * each filled circle represent current robot`s location
-	 * */
-	private void drawRobots() 
-	{
-		int i = 1;
-		for(Robot r : robots_List)
-		{
-			StdDraw.setPenRadius(0.040);
-			StdDraw.setPenColor(Color.MAGENTA);
-			StdDraw.point(r.getP().x(), r.getP().y());
-			StdDraw.setPenColor(242, 19, 227);
-			StdDraw.text(rx.get_max() - 0.002 - 0.0035*i, ry.get_max()-0.0005, 
-					"robot "+ (i++) + " score: " + r.getMoney());
-
-		}
-	}
 
 
-	/**
-	 * this method iterate over all fruit`s JSON string that given from server,
-	 * and fill fruits_List with fruits objects <br>
-	 * * when finished call method drawFruits() to draw the fruits
-	 * @param fruits - List of JSON strings, each represent fruit.
-	 * */
-	private void drawFruits(List<String> fruits) 
-	{
-		fruits_List = new ArrayList<>();
-		Iterator<String> it = fruits.iterator();
-		while(it.hasNext())
-		{
-			Fruit f = getFruit(it.next());
-			fruits_List.add(f);
-		}
-		drawFruits();
-	}
-
-	/**
-	 * places a small icon on location fruit`s coordinations
-	 * <br>
-	 * apple icon for fruit type 1 and banana icon for -1 fruit type
-	 * */
-	private void drawFruits() 
-	{
-		for(Fruit f : fruits_List)
-		{
-			String fruit_icon = f.getValue() == 1 ? "./apple.png" : "./banana.png";
-			StdDraw.picture(f.getP().x(), f.getP().y(), fruit_icon);
-		}
-	}
-
-	/**
-	 * auxiliary function to parse JSON string representing fruit,
-	 * using the parsed data it builds fruit object
-	 * @param JSONFruit - JSON string representing fruit.
-	 * @return new fruit object with the data inside the JSON string
-	 * */
-	private Fruit getFruit(String JSONFruit) 
-	{
-		double value = 0;
-		Point3D p=null;
-		int type = 0;
-		try 
-		{
-			org.json.JSONObject jo = new org.json.JSONObject(JSONFruit);
-			org.json.JSONObject fruit = (JSONObject) jo.get("Fruit");
-			value =  fruit.getDouble("value");
-			p = new Point3D( (String)fruit.get("pos") );
-			type = fruit.getInt("type");
-		} 
-		catch (JSONException e) 
-		{
-			e.printStackTrace();
+		
+		
+/**
+*find where is the fruit on the edge.
+* */
+		public edge_data findEdgeFruit(Point3D pf,int type) {
+			edge_data e=new EdgeData();
+			
+			Collection<node_data> nc = dgraph.getV();
+			for (node_data n: nc ) {
+				Point3D p1=n.getLocation(); 
+				Collection<edge_data> ec = dgraph.getE(n.getKey());
+				for (edge_data e1: ec) {
+					Point3D p2 = dgraph.getNode(e1.getDest()).getLocation();
+					if(p1.distance3D(pf)+pf.distance3D(p2)-p1.distance3D(p2)<epsilon)
+						return e1;
+				
+				}
+				
+			}
+		return e;
 		}
 
-		return new Fruit(value, p, findEdge(p, type));
-	}
+		//return the number of robots.
+		
+		public int getnumR(game_service game) {
+			int rn=0;
+			String g=game.toString();
+			JSONObject l;
+			try {
+			l=new JSONObject(g);
+			JSONObject t = l.getJSONObject("GameServer");
+			rn=t.getInt("robots");
+			}
+			catch (JSONException e) {e.printStackTrace();}
+		return rn;
+		}
 
-	/**
-	 * this method iterate over all vertices in current graph,
-	 * trying to find the edge which the given fruit belongs to.
-	 * @param Fruit : the location of the fruit we want to locate it`s edge.
-	 * @param type : 1 for banana and -1 for apple (determined by edge direction).
-	 * @return the edge which the fruit in the given location belongs to, null if there is no such one.
-	 * */
-	private edge_data findEdge(Point3D Fruit, int type)//determine whether a given fruit exist on current edge
-	{
-		for(node_data src: dGraph.getV())
-		{
-			if(dGraph.getE(src.getKey()) != null)
+		
+/**
+*draw the graph.
+* */
+		private void drawGraph(graph G) {
+
+		
 			{
-				for(edge_data edge:dGraph.getE(src.getKey()))
+				StdDraw.setXscale(rx.get_min(),rx.get_max());
+				StdDraw.setYscale(ry.get_min(),ry.get_max());
+				StdDraw.setPenColor(Color.BLACK);
+				for(node_data myNode:G.getV())
 				{
-					node_data dest = dGraph.getNode(edge.getDest());
-					double fruitToSrc = Fruit.distance2D(src.getLocation());
-					double fruitToDest = Fruit.distance2D(dest.getLocation());
-					double srcToDest = src.getLocation().distance2D( dest.getLocation());
-					if(fruitToSrc + fruitToDest - srcToDest < epsilon)
+					double x0=myNode.getLocation().x();
+					double y0=myNode.getLocation().y();
+					if(G.getE(myNode.getKey())!=null)
 					{
-						if(type == 1 && src.getKey() < dest.getKey())
-							return edge;
-						if(type == -1 && src.getKey() > dest.getKey())
-							return edge;
+						for(edge_data edge:G.getE(myNode.getKey()))
+						{
+							//size and color pen
+							StdDraw.setPenRadius(0.0039); 
+							StdDraw.setPenColor(Color.BLACK);
+						
+							double x1=G.getNode(edge.getDest()).getLocation().x();
+							double y1=G.getNode(edge.getDest()).getLocation().y();
+
+							//edges
+							StdDraw.line(x0, y0, x1, y1);
+							StdDraw.setPenRadius(0.02);
+
+							//direction 
+							StdDraw.setPenColor(Color.orange);
+							StdDraw.point(x0*0.1+x1*0.9, y0*0.1+y1*0.9);
+
+							//draw nodes
+							StdDraw.setPenColor(Color.BLUE);
+							StdDraw.point(x1, y1);
+
+							//nodes key
+							StdDraw.setPenColor(Color.BLACK);
+							StdDraw.text(x0,y0 + epsilon, myNode.getKey()+"");
+
+						
+						}
 					}
+					StdDraw.setPenColor(Color.BLUE);
+					StdDraw.point(x0, y0);
+				
+			}
+			}
+		}
+		
+		
+/**
+*return the min and max of x point.
+* */
+		public Range FindXmaxmin(graph g) {
+			
+			double xmin=Double.MAX_VALUE; 
+			double xmax=Double.MIN_VALUE; 
+			Collection<node_data> nc = g.getV();
+			for(node_data n: nc) {
+				
+				double px=n.getLocation().x();
+				
+				if(px>xmax) {
+					xmax=px;
+				}
+			
+				if(px<xmin) {
+					xmin=px;
 				}
 			}
-		}
-		return null;
-	}
-
-	/**
-	 * parse from JSON how many robots are in the chosen game.
-	 * @param - JSON string contains the robots number
-	 * @return robots number in the current game
-	 * */
-	private static int getRobotsNumber(String s) 
-	{
-		try 
-		{
-			org.json.JSONObject jo = new org.json.JSONObject(s);
-			org.json.JSONObject gs = (org.json.JSONObject)jo.get("GameServer");
-			return gs.getInt("robots");
-		} 
-		catch (JSONException e) 
-		{
-			e.printStackTrace();
+		
+			return new Range(xmin-0.001,xmax+0.001);
 		}
 
-		return 0;
-	}
-
-	/**
-	 * this method draw a given graph on GUI window using StdDraw lib
-	 * @param g - the given graph
-	 * */
-	private void drawGraph(graph G)
-	{
-		StdDraw.setXscale(rx.get_min(),rx.get_max());
-		StdDraw.setYscale(ry.get_min(),ry.get_max());
-		StdDraw.setPenColor(Color.BLACK);
-		for(node_data vertex:G.getV())
-		{
-			double x0=vertex.getLocation().x();
-			double y0=vertex.getLocation().y();
-			if(G.getE(vertex.getKey())!=null)
-			{
-				for(edge_data edge:G.getE(vertex.getKey()))
-				{
-					StdDraw.setPenRadius(0.0015);
-					StdDraw.setPenColor(Color.orange);
-					Font f=new Font("BOLD", Font.ITALIC, 18);
-					StdDraw.setFont(f);
-					double x1=G.getNode(edge.getDest()).getLocation().x();
-					double y1=G.getNode(edge.getDest()).getLocation().y();
-
-					//draw edges
-					StdDraw.line(x0, y0, x1, y1);
-					StdDraw.setPenRadius(0.02);
-
-					//draw direction points
-					StdDraw.setPenColor(Color.GREEN);
-					StdDraw.point(x0*0.1+x1*0.9, y0*0.1+y1*0.9);
-
-					//draw dest vertex
-					StdDraw.setPenColor(Color.RED);
-					StdDraw.point(x1, y1);
-
-					//draw vertices weights
-					StdDraw.setPenColor(Color.BLACK);
-					StdDraw.text(x0,y0 + epsilon2, vertex.getKey()+"");
-
-					//draw edges weight
-					//					StdDraw.setPenColor(Color.BLACK);
-					//					StdDraw.text((x0+x1)/2, (y0+y1)/2,edge.getWeight()+"");
+		
+/**
+*return the min and max of y point.
+* */
+		public Range FindYmaxmin(graph g) {
+			
+			double ymin=Double.MAX_VALUE; 
+			double ymax=Double.MIN_VALUE; 
+			Collection<node_data> nc = g.getV();
+			for(node_data n: nc) {
+				
+				double py=n.getLocation().y();
+				
+				if(py>ymax) {
+					ymax=py;
+				}
+			
+				if(py<ymin) {
+					ymin=py;
 				}
 			}
-			StdDraw.setPenRadius(0.02);
-			StdDraw.setPenColor(Color.RED);
-			StdDraw.point(x0, y0);
+			
+			return new Range(ymin-0.001,ymax+0.001);
 		}
-	}
 
-	/**
-	 * iterate over all vertices in given graph to find min and max x values
-	 * @param g - the given graph
-	 * @return new Range object with min and max x values	
-	 * */
-	private Range findRx(graph g) 
-	{
-		double minX=0, maxX=0;
-		boolean flag = true;
-		for(node_data node :g.getV())
-		{
-			double x = node.getLocation().x();
-			if(flag)
-			{
-				minX = x;
-				maxX = x;
-				flag = false;
-			}
+		
+/**
+*Pushes to String extension of .kml.
+* */
+		public static void startKML(String file_name) { 
 
-			if(x < minX) minX = x;
-			if(x > maxX) maxX = x;
+			if(!file_name.endsWith(".kml") && !file_name.endsWith(".KML"))
+				file_name += ".kml";
+			KmlName = file_name;
+			KML_Logger.createFile(file_name, numgame);
+			KMLbool = true;
+
 		}
-		double diff = (maxX-minX);
-		return new Range(minX - diff / 10, maxX + diff / 10);
-	}
 
-	/**
-	 * iterate over all vertices in given graph to find min and max y values
-	 * @param g - the given graph
-	 * @return new Range object with min and max y values	
-	 * */
-	private Range findRy(graph g) 
-	{
-		double minY=0, maxY=0;
-		boolean flag = true;
-		for(node_data node :g.getV())
-		{
-			double y = node.getLocation().y();
-			if(flag)
-			{
-				minY = y;
-				maxY = y;
-				flag = false;
-			}
-			if(y < minY) minY = y;
-			if(y > maxY) maxY = y;
+
+		public static boolean KMLbool() {
+
+			return KMLbool;
+
 		}
-		double diff = maxY - minY;
-		return new Range(minY - diff / 10, maxY + diff / 10);
-	}
-
-	public static void main(String[] args) 
-	{
-		new auto();
-	}
-
-
 }

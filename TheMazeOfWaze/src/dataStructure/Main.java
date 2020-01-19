@@ -49,9 +49,9 @@ public class Main {
 	
 		
 		g1.init(x);
-		graph copy=g1.copy();
-		System.out.println(copy.getV().toString());
-		System.out.println(copy.getE(n.getKey()));
+		//graph copy=g1.copy();
+		//System.out.println(copy.getV().toString());
+		//System.out.println(copy.getE(n.getKey()));
 		g1.save("output.txt");
 		System.out.println(g1.toString());
 		System.out.println(	g1.isConnected());
@@ -61,7 +61,7 @@ public class Main {
 		
 		System.out.println(g1.shortestPath(2, 5));
 		System.out.println(g1.shortestPathDist(4, 2));
-		//System.out.println(g1.TSP(list).toString());
+		System.out.println(g1.TSP(list).toString());
 	
 		Point3D p1=new Point3D (1,1);
 		Point3D p2=new Point3D (3,2);

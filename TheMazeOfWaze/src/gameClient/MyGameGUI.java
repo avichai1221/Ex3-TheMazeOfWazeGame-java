@@ -7,7 +7,8 @@ import javax.swing.JOptionPane;
 
 import java.awt.Color;
 import java.awt.Font;
-
+import java.io.FileNotFoundException;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 
@@ -22,32 +23,36 @@ import dataStructure.EdgeData;
 import dataStructure.edge_data;
 import dataStructure.graph;
 import dataStructure.node_data;
+import gui.Graph_GUI;
 import utils.Point3D;
 import utils.Range;
 import utils.StdDraw;
 
 public class MyGameGUI implements Runnable {
 	
-	 Range rx;
-	 Range ry;
+	 Range rx, ry;
 	 static double X = 0;
 	 static double Y = 0;
-	 final static double epsilon = 0.00019;
-	game_service game;
+	 final static double epsilon = 0.0000001;
+	 final static double epsilon2 = 0.00019;
+	 static boolean KMLbool = false;
+	 static String KML_file_name;
+	 private static int numgame;
+	 game_service game;
+	graph gr;
 	DGraph dgraph;
+	Graph_GUI gui;
 	ArrayList<Robot> rob;
 	ArrayList<Fruit> fru;
 	
-	/*
-	 * Contractor-start game - if we want decide scenario number for game.
-	 */
-    public MyGameGUI(int g)
-    {
+    public MyGameGUI(int g){
 
        game = Game_Server.getServer(g);
+       numgame=g;
        String graph= game.getGraph();
        dgraph= new DGraph();
        dgraph.init(graph);
+       gui = new Graph_GUI(dgraph);
        rx = FindXmaxmin(dgraph);
        ry = FindYmaxmin(dgraph);
        
@@ -55,47 +60,44 @@ public class MyGameGUI implements Runnable {
        t.start();
 
     }
-  
-    /*
-  	 * Contractor-start game 
-  	 */
-  	public MyGameGUI()
-  	{
-  	//Selecting a random scenario number between 0-23
-  			int scenarioNumber=(int)(Math.random()*23);
-  			//JOptionPane.showInputDialog("The scenario number that choosen is"+scenarioNumber);
-  			System.out.println("The scenario number that choosen is "+scenarioNumber);
-  			game = Game_Server.getServer(scenarioNumber);
+	public MyGameGUI() {
+		//Selecting a random scenario number between 0-23
+			int scenarioNumber=(int)(Math.random()*23);
+			numgame=scenarioNumber;
+			System.out.println("The scenario number that choosen is "+scenarioNumber);
+			game = Game_Server.getServer(scenarioNumber);
 
-  			//Preparing graph to be like the graph on scenario Number in server
-  			dgraph = new DGraph();
-  			dgraph.init(game.getGraph());
-  			
-  			//scale x and y
-  			rx = FindXmaxmin(dgraph);
-  			ry = FindYmaxmin(dgraph);
-  			
-  			//thread for reload game //play for run function
-  			 Thread t=new Thread(this);
-  	         t.start();	
-  	}
+			//Preparing graph to be like the graph on scenario Number in server
+			dgraph = new DGraph();
+			dgraph.init(game.getGraph());
+			
+			//scale x and y
+			rx = FindXmaxmin(dgraph);
+			ry = FindYmaxmin(dgraph);
+			
+			//thread for reload game //play for run function
+			 Thread t=new Thread(this);
+	         t.start();	
+	}
     
-    
-    /*
-     * @see java.lang.Runnable#run()
-     */
     @Override
 	public void run() 
 	{
-		drawGraph(dgraph); //draw the graph
-		 //Checks how many robots in the game
+		drawGraph(dgraph);
 		int numR=getnumR(game);
-		addRobot1(numR,game); //add all the robots on scenario nodes 
-		 initTheGameForFruit(game);
-		 initTheGameForRobot(game); 
-		 
-		
-		int press=JOptionPane.showConfirmDialog(null, "The scenario number is choosen, You want to stat ?");
+		addRobot1(numR,game); 
+		initTheGameForFruit(game);
+		initTheGameForRobot(game); 
+		int ans=JOptionPane.showConfirmDialog(null, "you want KML file??", "message", JOptionPane.YES_OPTION);
+		if(ans == 0) 
+		{
+			
+			String input = JOptionPane.showInputDialog("enter your name file");
+			if(input != null && input != "")
+				startKML(input);
+
+		}
+		int press=JOptionPane.showConfirmDialog(null, "The scenario number is choosen, You want to start ?");
      	if(press!=0) System.exit(0); //if the user press NO or CANCEL, stop the game.
      	
 		game.startGame();
@@ -104,15 +106,14 @@ public class MyGameGUI implements Runnable {
 		StdDraw.setPenRadius(15);
 		StdDraw.setPenColor(Color.BLACK);
 		StdDraw.text( rx.get_max()-0.027, ry.get_max()-0.0005,"End game in:"+game.timeToEnd()/1000);
-				
 		double oldX = X;
 		double oldY = Y;
 		
-		while(game.isRunning())
-		{
+		while(game.isRunning()) {
+		
 			
-			if(X != oldX && Y != oldY)
-			{
+			if(X != oldX && Y != oldY) {
+			
 				node_data dest = searchForDest(X, Y);
 				Robot r = CloseRobot(dest);
 				game.chooseNextEdge(r.getId(), dest.getKey());
@@ -120,15 +121,27 @@ public class MyGameGUI implements Runnable {
 				oldY = Y;
 			}
 			game.move();
-			RefreshFrame();
-			try 
-			{
+			refreshGame();
+			try {
+			
 				Thread.sleep(100);
 			} 
-			catch (InterruptedException e) 
-			{
+			catch (InterruptedException e) {
+			
 				e.printStackTrace();
 			}
+		}
+		if(KMLbool) {
+
+			try {
+				KML_Logger.closeFile(KML_file_name);
+
+			}catch (IOException e) {
+
+				e.printStackTrace();
+
+			}
+
 		}
 		//show the score of all robots.
 		String message = "";
@@ -139,12 +152,12 @@ public class MyGameGUI implements Runnable {
 		System.exit(0);
 
 	}
-  
+	
+
 	/*
-	 * Checks how many robots we need in the game.
+	 * Checks and return how many robots we need in the game.
 	 */
-	public int getnumR(game_service game)
-	{
+	public int getnumR(game_service game) {
 		int rn=0;
 		String g=game.toString();
 		JSONObject l;
@@ -158,23 +171,18 @@ public class MyGameGUI implements Runnable {
 	}
 	
 	/*
-	 * Adds all robots to the graph (random).
+	 * Adds robots to the graph (random).
 	 */
-	public void addRobot1(int numR,game_service game)
-	{
-		for (int i = 0; i < numR; i++)
-		{
-			int robotOnNode=(int)(Math.random()*dgraph.nodeSize());
-			game.addRobot(robotOnNode);
-			System.out.println("robot on node:"+robotOnNode);
+	public void addRobot1(int numR,game_service game) {
+		for (int i = 0; i < numR; i++) {
+			game.addRobot(i);
 		}
 	}
 	
 	/*
 	 * Initial builds and draws the robots.
 	 */
-	public void initTheGameForRobot(game_service game)
-	{
+	public void initTheGameForRobot(game_service game) {
 		
 		rob=new ArrayList<>();
 		List<String> r=game.getRobots();
@@ -183,21 +191,17 @@ public class MyGameGUI implements Runnable {
 			JSONArray j =new JSONArray(RJ);
 			int i=0; 
 			int c=0;
-			while(i<j.length())
-			{
+			while(i<j.length()) {
 				String help="";
 				JSONObject n=(JSONObject) j.get(i);
 				JSONObject jr = n.getJSONObject("Robot");
 				String s=jr.getString("pos");
 				String p[]=new String[3];
-				for (int k = 0; k < s.length(); k++)
-				{
-					if(s.charAt(k)!=',')
-					{
+				for (int k = 0; k < s.length(); k++) {
+					if(s.charAt(k)!=',') {
 						help=help+s.charAt(k);
 					}
-					if(c<3&&s.charAt(k)==',')
-					{
+					if(c<3&&s.charAt(k)==',') {
 						p[c]=help; 
 						c++;
 						help="";
@@ -217,36 +221,45 @@ public class MyGameGUI implements Runnable {
 				Robot ro=new Robot(src,p1,id,dest,value,speed);
 				rob.add(ro);
 				i++;
+			
+				if(KMLbool) {
+
+					try {
+						KML_Logger.write(KML_file_name, ro.p.x(), ro.p.y(), "Robot", game.timeToEnd());
+
+					} catch (FileNotFoundException e) {
+						e.printStackTrace();
+
+					}
+
+				}
+			
 			}
 		
 		
-		}catch(Exception error)
-		{
+		}catch(Exception error) {
 			error.printStackTrace();
 
 			System.out.println("catch");
 		
 	}
 		int n=1;
-		for (Robot r1: rob)
-		{
-			String icon = "";
-			icon="./robot.jpg";
-		StdDraw.setPenRadius(0.030);
+		for (Robot r1: rob) {
+			
+			StdDraw.setPenRadius(0.030);
 		StdDraw.setPenColor(Color.black);
 		StdDraw.point(r1.p.x(), r1.p.y());
+
 		StdDraw.text(rx.get_max() - 0.001 - 0.0075*n, ry.get_max()-0.0005, 
 				"robot "+ (n++) + " score: " + r1.value);
-		StdDraw.picture(r1.p.x(), r1.p.y(), icon);
+
 	}
 	
 	}
-
 	/*
 	 * Initial builds and draws the fruits.
 	 */
-	public void initTheGameForFruit(game_service game)
-	{
+	public void initTheGameForFruit(game_service game) {
 		
 		fru=new ArrayList<Fruit>();
 		List<String> f= game.getFruits();
@@ -256,21 +269,17 @@ public class MyGameGUI implements Runnable {
 			JSONArray j =new JSONArray(FJ);
 			int i=0; 
 			int c=0;
-			while(i<j.length())
-			{
+			while(i<j.length()) {
 				String help="";
 				JSONObject n=(JSONObject) j.get(i);
 				JSONObject jf = n.getJSONObject("Fruit");
 				String s=jf.getString("pos");
 				String p[]=new String[3];
-				for (int k = 0; k < s.length(); k++)
-				{
-					if(s.charAt(k)!=',')
-					{
+				for (int k = 0; k < s.length(); k++) {
+					if(s.charAt(k)!=',') {
 						help=help+s.charAt(k);
 					}
-					if(c<3&&s.charAt(k)==',')
-					{
+					if(c<3&&s.charAt(k)==',') {
 						p[c]=help; 
 						c++;
 						help="";
@@ -284,13 +293,32 @@ public class MyGameGUI implements Runnable {
 				Point3D p1=new Point3D(x,y,z);
 				double value=jf.getDouble("value");
 				int type=jf.getInt("type");
-				Fruit fr=new Fruit(value,p1,type);
+				Fruit fr=new Fruit(value,p1,type,findEdgeFruit(p1,type));
 				fru.add(fr);
 				i++;
-		}
+		
+				if(KMLbool) {
+					
+					String objType = "";
+						if(fr.type == 1)
+							objType="Apple";
+						else 
+							objType="Banana";
+				
+					try {
+					KML_Logger.write(KML_file_name, fr.p.x(), fr.p.y(), objType, game.timeToEnd());
+				
+					} catch (FileNotFoundException e) {
+						 
+						e.printStackTrace();
+							
+					}
+				
+				}
+			
+			}
 	
-		}catch(Exception error)
-		{
+		}catch(Exception error) {
 		error.printStackTrace();
 
 		System.out.println("catch");
@@ -298,45 +326,41 @@ public class MyGameGUI implements Runnable {
 		}
 		
 		for (Fruit f1: fru) {
-			String icon = ""; 
+			String fruit_icon = ""; 
 			if(f1.type==1)
-				icon="./apple.png";
+				fruit_icon="./apple.png";
 			if(f1.type==-1)
-				icon="./banana.png";
+				fruit_icon="./banana.png";
 			
 		
-			StdDraw.picture(f1.p.x(), f1.p.y(), icon);
+			StdDraw.picture(f1.p.x(), f1.p.y(), fruit_icon);
 		}
 	}
 	
 	/*
 	 * find where put the fruit on the graph.
 	 */
-	public edge_data findEdgeFruit(Point3D pf,DGraph d)
-	{
+	public edge_data findEdgeFruit(Point3D pf,int type) {
 		edge_data e=new EdgeData();
 		
-		Collection<node_data> nc = d.getV();
-		for (node_data n: nc )
-		{
+		Collection<node_data> nc = dgraph.getV();
+		for (node_data n: nc ) {
 			Point3D p1=n.getLocation(); 
-			Collection<edge_data> ec = d.getE(n.getKey());
-			for (edge_data e1: ec)
-			{
-				Point3D p2 = d.getNode(e1.getDest()).getLocation();
-				if(pf.distance3D(p1)+pf.distance3D(p2)==p1.distance3D(p2))
-					return e;
+			Collection<edge_data> ec = dgraph.getE(n.getKey());
+			for (edge_data e1: ec) {
+				Point3D p2 = dgraph.getNode(e1.getDest()).getLocation();
+				if(pf.distance3D(p1)+pf.distance3D(p2)-p1.distance3D(p2)<epsilon)
+					return e1;
 			}
 			
 		}
-	return null;
+	return e;
 	}
 
 	/**
 	 * find the values of x (min and max).
 	 * */
-	public Range FindXmaxmin(graph g)
-	{
+	public Range FindXmaxmin(graph g) {
 		
 		double xmin=Double.MAX_VALUE; 
 		double xmax=Double.MIN_VALUE; 
@@ -345,25 +369,21 @@ public class MyGameGUI implements Runnable {
 			
 			double px=n.getLocation().x();
 			
-			if(px>xmax)
-			{
+			if(px>xmax) {
 				xmax=px;
 			}
 		
-			if(px<xmin)
-			{
+			if(px<xmin) {
 				xmin=px;
 			}
 		}
 	
 		return new Range(xmin-0.001,xmax+0.001);
 	}
-	
 	/**
 	 * find the values of y (min and max).
 	 * */
-	public Range FindYmaxmin(graph g) 
-	{
+	public Range FindYmaxmin(graph g) {
 		
 		double ymin=Double.MAX_VALUE; 
 		double ymax=Double.MIN_VALUE; 
@@ -372,23 +392,21 @@ public class MyGameGUI implements Runnable {
 			
 			double py=n.getLocation().y();
 			
-			if(py>ymax)
-			{
+			if(py>ymax) {
 				ymax=py;
 			}
 		
-			if(py<ymin)
-			{
+			if(py<ymin) {
 				ymin=py;
 			}
 		}
 		
 		return new Range(ymin-0.001,ymax+0.001);
 	}
-	
-/*
- * draw the graph
- */
+	/*
+	 * draw the graph
+	 */
+
 	public void drawGraph(graph G)
 	{
 		StdDraw.setXscale(rx.get_min(),rx.get_max());
@@ -432,18 +450,15 @@ public class MyGameGUI implements Runnable {
 			StdDraw.point(x0, y0);
 		}
 	}
-
 	/*
 	 * find the closest robot to the node.
 	 */
-	public Robot CloseRobot(node_data d)
-	{
+	public Robot CloseRobot(node_data d) {
 	
 		
 		Robot ans=new Robot(); 
 		boolean first = true;
-		for(Robot r: rob)
-		{
+		for(Robot r: rob) {
 			
 			if(first)
 			{
@@ -492,7 +507,7 @@ public class MyGameGUI implements Runnable {
 	/**
 	 * refresh the frame all the time that the game is running
 	 * */
-	public void RefreshFrame()
+	public void refreshGame()
 	{
 		StdDraw.enableDoubleBuffering();
 		StdDraw.clear();
@@ -501,26 +516,37 @@ public class MyGameGUI implements Runnable {
 		drawGraph(dgraph);
 		initTheGameForFruit(game);
 		initTheGameForRobot(game);
-
-		//show time
-		StdDraw.setPenRadius(15);
-		StdDraw.setPenColor(Color.BLACK);
-		StdDraw.text(rx.get_max()-0.002, ry.get_max()-0.0005,"End game in:"+ game.timeToEnd() / 1000);
+		StdDraw.setPenColor(Color.BLUE);
+		StdDraw.text(rx.get_max()-0.002, ry.get_max()-0.0005,"time to end: "+ game.timeToEnd() / 1000);
 		StdDraw.show();
 	}
-
 	/*
 	 * update the values of user click
 	 */
-public static void updateXY(double mouseX, double mouseY) 
-
-{
+public static void updateXY(double mouseX, double mouseY) {
 
 	X = mouseX;
-
 	Y = mouseY;
 
 }
-	
+public static void startKML(String file_name) {
+
+	if(!file_name.endsWith(".kml") && !file_name.endsWith(".KML"))
+		file_name += ".kml";
+		KML_file_name = KML_Logger.createFile(file_name, numgame);
+		KMLbool = true;
+}
+
+/**
+
+ * @return true if we already writing to KML file.
+
+ * */
+
+public static boolean KMLbool() {
+
+	return KMLbool;
+
+}
 }
 
