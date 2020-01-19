@@ -1,4 +1,4 @@
-# Ex3-TheMazeOfWaze-java
+# Ex3-TheMazeOfWazeGame-java
 
 This project Dealing with the subject directed graphs and contains the classes NodeData, EdgeData, DGraph, Graph_Algo and Graph_GUI.
 In addition in this project you can actually play a game that implements by class MyGameGUI and even play an automatic game with the help of the auto class
