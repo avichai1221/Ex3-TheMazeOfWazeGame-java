@@ -22,7 +22,7 @@ On WIKI you can read more detail about all the functions and algorithms that are
 
 
 
-
+![](https://github.com/avichai1221/Ex3-TheMazeOfWazeGame-java/blob/master/examplePNG.PNG?raw=true)
 
 
 This image is for demonstration purposes.
