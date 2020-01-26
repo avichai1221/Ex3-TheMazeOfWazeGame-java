@@ -35,10 +35,17 @@ import dataStructure.graph;
 public class SimpleGameClient {
 	public static void main(String[] a) {
 		//test1();
-		int scenario_num = 23;
-//		game_service game = Game_Server.getServer(scenario_num); // you have [0,23] games
+	//	int scenario_num = 0;
+	//	MyGameGUI m=new MyGameGUI();
+		
+//		Game_Server.login(315660845);
+	//game_service game = Game_Server.getServer(0); // you have [0,23] games
+	//	auto m=new auto(4);
 		MyGameGUI m=new MyGameGUI();
-		auto auto=new auto(23);
+	//	String remark = "bbb";
+	//	game.sendKML(remark);
+	//	game_service game = Game_Server.getServer(0);
+	//	auto auto=new auto(-31);
 	
 	}
 	/*public static void test1()   {

@@ -2,20 +2,16 @@ package gameClient;
 
 
 import java.util.List;
-
 import javax.swing.JOptionPane;
-
 import java.awt.Color;
 import java.awt.Font;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
-
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
-
 import Server.Game_Server;
 import Server.game_service;
 import dataStructure.DGraph;
@@ -34,16 +30,15 @@ public class MyGameGUI implements Runnable {
 	 static double X = 0;
 	 static double Y = 0;
 	 final static double epsilon = 0.0000001;
-	 final static double epsilon2 = 0.00019;
 	 static boolean KMLbool = false;
 	 static String KML_file_name;
 	 private static int numgame;
 	 game_service game;
-	graph gr;
 	DGraph dgraph;
 	Graph_GUI gui;
 	ArrayList<Robot> rob;
 	ArrayList<Fruit> fru;
+	
 	
     public MyGameGUI(int g){
 
@@ -61,6 +56,25 @@ public class MyGameGUI implements Runnable {
 
     }
 	public MyGameGUI() {
+			int ans=JOptionPane.showConfirmDialog(null," If you want auto game press YES and if you want menual game press NO", "message", JOptionPane.YES_OPTION);
+		
+ 		if((ans==0))
+ 		{
+ 			String forID = "";
+ 			forID = JOptionPane.showInputDialog(null, " What is your ID ?");
+ 			Game_Server.login(Integer.parseInt(forID));
+ 			String ans2= JOptionPane.showInputDialog("choose a scenarioNumber  (0-23)\n Note!" + 
+ 					"The game will not work if you enter a high stage from yours");
+ 			int scenarioNumber= Integer.parseInt(ans2);
+ 			
+ 		new auto(scenarioNumber);
+ 		
+ 			
+ 		}
+ 		   
+ 		else if (ans==1)
+ 		{
+		
 		//Selecting a random scenario number between 0-23
 			int scenarioNumber=(int)(Math.random()*23);
 			numgame=scenarioNumber;
@@ -78,6 +92,14 @@ public class MyGameGUI implements Runnable {
 			//thread for reload game //play for run function
 			 Thread t=new Thread(this);
 	         t.start();	
+	         
+	         
+	         
+	         
+	}
+ 		else {
+ 			System.exit(0);
+ 		}
 	}
     
     @Override
@@ -538,9 +560,7 @@ public static void startKML(String file_name) {
 }
 
 /**
-
  * @return true if we already writing to KML file.
-
  * */
 
 public static boolean KMLbool() {
@@ -548,5 +568,12 @@ public static boolean KMLbool() {
 	return KMLbool;
 
 }
-}
 
+
+
+
+	
+	
+	
+	
+}

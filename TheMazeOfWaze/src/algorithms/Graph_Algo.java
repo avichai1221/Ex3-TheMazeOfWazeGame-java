@@ -140,16 +140,22 @@ public class Graph_Algo implements graph_algorithms,Serializable{
 		return true;
 		}
 	
+	
+	
+	/**
+	 * returns the length of the shortest path between src to dest
+	 * @param src - start node
+	 * @param dest - end (target) node
+	 * @return
+	 */
 	@Override
-	public double shortestPathDist(int src, int dest)//dijkstra 
-
+	public double shortestPathDist(int src, int dest)//Dijkstra
+	//מסלול קצר ביותר
+//המסלול הקצר ביותר בין שתי נקודות היא המסלול בעל סכום המשקולות הנמוך ביותר בין שתי הנקודות.
+	//יחזיר את סכום המשקלים במסלול הקצר ביותר
 	{
-
-
 		putTag0(d);
-
 		Tags1(src,d);
-
 		if(d.getNode(dest).getTag()!=1) {
 
 			System.out.println("There is not a path");
@@ -281,6 +287,17 @@ public class Graph_Algo implements graph_algorithms,Serializable{
 
 	}
 
+	
+	
+
+	
+	/**
+	 * returns the the shortest path between src to dest - as an ordered List of nodes:
+	 * src--> n1-->n2-->...dest
+	 * @param src - start node
+	 * @param dest - end (target) node
+	 * @return
+	 */
 	@Override
 	public List<node_data> shortestPath(int src, int dest) 
 
@@ -290,10 +307,8 @@ public class Graph_Algo implements graph_algorithms,Serializable{
 		if(shortestPathDist(src,dest)==Double.MAX_VALUE)
 
 		{
-
 			ans.add(d.getNode(src));
 			return ans;
-
 		}
 
 
@@ -315,7 +330,17 @@ public class Graph_Algo implements graph_algorithms,Serializable{
 		return ans;
 
 	}
-
+	
+	
+	
+	/**
+	 * computes a relatively short path which visit each node in the targets List.
+	 * Note: this is NOT the classical traveling salesman problem, 
+	 * as you can visit a node more than once, and there is no need to return to source node - 
+	 * just a simple path going over all nodes in the list. 
+	 * @param targets
+	 * @return
+	 */
 	@Override
 	public List<node_data> TSP(List<Integer> targets) 
 	{
